@@ -23,10 +23,12 @@
 
 #pragma SWIG nowarn=321
 #pragma SWIG nowarn=403
+#pragma SWIG nowarn=325
 
 typedef unsigned long uint64_t;
 typedef uint64_t size_t;
-typedef int int32_t ;
+typedef int int32_t;
+typedef unsigned char uint8_t;
 
 #define __restrict
 
@@ -75,7 +77,9 @@ extern "C" {
 #include "IndexPQ.h"
 #include "IndexIVF.h"
 #include "IndexIVFPQ.h"
+#include "IndexIVFFlat.h"
 #include "IndexScalarQuantizer.h"
+#include "IndexHNSW.h"
 #include "MetaIndexes.h"
 #include "FaissAssert.h"
 
@@ -84,6 +88,7 @@ extern "C" {
 #include "utils.h"
 #include "Heap.h"
 #include "AuxIndexStructures.h"
+#include "OnDiskInvertedLists.h"
 
 #include "Clustering.h"
 
@@ -108,6 +113,7 @@ namespace std {
     public:
         vector();
         void push_back(T);
+        void clear();
         T * data();
         size_t size();
         T at (size_t n) const;
@@ -117,12 +123,14 @@ namespace std {
 
 
 %template(FloatVector) std::vector<float>;
+%template(DoubleVector) std::vector<double>;
 %template(ByteVector) std::vector<uint8_t>;
 %template(Uint64Vector) std::vector<uint64_t>;
 %template(LongVector) std::vector<long>;
 %template(IntVector) std::vector<int>;
 %template(VectorTransformVector) std::vector<faiss::VectorTransform*>;
 %template(OperatingPointVector) std::vector<faiss::OperatingPoint>;
+%template(InvertedListsPtrVector) std::vector<faiss::InvertedLists*>;
 %template(FloatVectorVector) std::vector<std::vector<float> >;
 %template(ByteVectorVector) std::vector<std::vector<unsigned char> >;
 %template(LongVectorVector) std::vector<std::vector<long> >;
@@ -244,6 +252,9 @@ int get_num_gpus()
 %include "IndexPQ.h"
 %include "IndexIVF.h"
 %include "IndexScalarQuantizer.h"
+%include "IndexHNSW.h"
+%include "IndexIVFFlat.h"
+%include "OnDiskInvertedLists.h"
 
 %ignore faiss::IndexIVFPQ::alloc_type;
 %include "IndexIVFPQ.h"
@@ -416,7 +427,6 @@ struct AsyncIndexSearchC {
 %typemap(out) faiss::Index * {
     DOWNCAST ( IndexIDMap )
     DOWNCAST ( IndexShards )
-    DOWNCAST ( IndexIVFPQCompact )
     DOWNCAST ( IndexIVFPQR )
     DOWNCAST ( IndexIVFPQ )
     DOWNCAST ( IndexIVFScalarQuantizer )
@@ -428,6 +438,11 @@ struct AsyncIndexSearchC {
     DOWNCAST ( IndexLSH )
     DOWNCAST ( IndexPreTransform )
     DOWNCAST ( MultiIndexQuantizer )
+    DOWNCAST ( IndexHNSWFlat )
+    DOWNCAST ( IndexHNSWPQ )
+    DOWNCAST ( IndexHNSWSQ )
+    DOWNCAST ( IndexHNSW2Level )
+    DOWNCAST ( Index2Layer )
 #ifdef GPU_WRAPPER
     DOWNCAST_GPU ( IndexProxy )
     DOWNCAST_GPU ( GpuIndexIVFPQ )
@@ -534,11 +549,14 @@ PyObject *swig_ptr (PyObject *a)
     if(PyArray_TYPE(ao) == NPY_FLOAT32) {
         return SWIG_NewPointerObj(data, SWIGTYPE_p_float, 0);
     }
+    if(PyArray_TYPE(ao) == NPY_FLOAT64) {
+        return SWIG_NewPointerObj(data, SWIGTYPE_p_double, 0);
+    }
     if(PyArray_TYPE(ao) == NPY_INT32) {
         return SWIG_NewPointerObj(data, SWIGTYPE_p_int, 0);
     }
     if(PyArray_TYPE(ao) == NPY_UINT8) {
-        return SWIG_NewPointerObj(data, SWIGTYPE_p_uint8_t, 0);
+        return SWIG_NewPointerObj(data, SWIGTYPE_p_unsigned_char, 0);
     }
     if(PyArray_TYPE(ao) == NPY_UINT64) {
         return SWIG_NewPointerObj(data, SWIGTYPE_p_unsigned_long, 0);
@@ -708,5 +726,37 @@ void ignore_SIGTTIN() {
 
 void ignore_SIGTTIN();
 
+
+%inline %{
+
+// numpy misses a hash table implementation, hence this class. It
+// represents not found values as -1 like in the Index implementation
+
+struct MapLong2Long {
+    std::unordered_map<long, long> map;
+
+    void add(size_t n, const long *keys, const long *vals) {
+        map.reserve(map.size() + n);
+        for (size_t i = 0; i < n; i++) {
+            map[keys[i]] = vals[i];
+        }
+    }
+
+    long search(long key) {
+        if (map.count(key) == 0) {
+            return -1;
+        } else {
+            return map[key];
+        }
+    }
+
+    void search_multiple(size_t n, const long *keys, long * vals) {
+        for (size_t i = 0; i < n; i++) {
+            vals[i] = search(keys[i]);
+        }
+    }
+};
+
+%}
 
 // End of file...

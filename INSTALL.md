@@ -6,7 +6,23 @@
 INSTALL file for Faiss (Fair AI Similarity Search)
 ==================================================
 
-The Faiss installation works in 3 steps, from easiest to most
+Install via Conda
+-----------------
+
+The easiest way to install FAISS is from anaconda. We regularly push stable releases to conda channel. FAISS conda package depends on mkl package shipped in conda.
+You can easily install it by
+
+```
+# CPU version only
+conda install faiss-cpu -c pytorch
+# GPU version requires CUDA to be installed, otherwise it falls back to CPU version
+conda install faiss-gpu -c pytorch
+```
+
+Compile from source
+-------------------
+
+The Faiss compilation works in 3 steps, from easiest to most
 involved:
 
 1. compile the C++ core and examples
@@ -17,7 +33,14 @@ involved:
 
 Steps 2 and 3 depend on 1, but they are otherwise independent.
 
-Alternatively, all 3 steps above can be run by building a Docker image (see section "Docker instructions" below).
+Alternatively, all 3 steps above can be run by building a Docker image (see
+section "Docker instructions" below).
+
+Alternatively, steps 1 and 3 can be built via the cmake scripts (see below).
+
+
+It is also possible to build a pure C interface. This optional process is
+described separately (please see the [C interface installation file](c_api/INSTALL.md))
 
 General compilation instructions
 ================================
@@ -47,8 +70,7 @@ dynamic libraries (useful for the Python wrapper).
 Step 1: Compiling the C++ Faiss
 ===============================
 
-The CPU version of Faiss is written in C++03, so it should compile
-even with relatively old C++ compilers.
+The CPU version of Faiss is written in C++11.
 
 BLAS/Lapack
 -----------
@@ -83,7 +105,7 @@ smoothly by running
 
 A basic usage example is in
 
-  `tests/demo_ivfpq_indexing`
+  `demos/demo_ivfpq_indexing`
 
 it makes a small index, stores it and performs some searches. A normal
 runtime is around 20s. With a fast machine and Intel MKL's BLAS it
@@ -97,13 +119,14 @@ dataset. To run it, please download the ANN_SIFT1M dataset from
 
 http://corpus-texmex.irisa.fr/
 
-and unzip it to the sudirectory sift1M.
+and unzip it to the subdirectory `sift1M` at the root of the source
+directory for this repository.
 
 Then compile and run
 
 ```
-make tests/demo_sift1M
-tests/demo_sift1M
+make demos/demo_sift1M
+demos/demo_sift1M
 ```
 
 This is a demonstration of the high-level auto-tuning API. You can try
@@ -169,12 +192,12 @@ Real-life test
 --------------
 
 The following script extends the demo_sift1M test to several types of
-indexes:
+indexes.  This must be run from the root of the source directory for this
+repository:
 
 ```
-export PYTHONPATH=.   # needed because the script is in a subdirectory
-mkdir tmp             # some output will be written there
-python python/demo_auto_tune.py
+mkdir tmp             # graphs of the output will be written here
+PYTHONPATH=. python demos/demo_auto_tune.py
 ```
 
 It will cycle through a few types of indexes and find optimal
@@ -189,11 +212,7 @@ the same ../makefile.inc for system-specific variables. You need
 libfaiss.a from Step 1 for this to work.
 
 The GPU version is a superset of the CPU version. In addition it
-requires:
-
-- a C++11 compliant compiler (and flags)
-
-- the cuda compiler and related libraries (Cublas)
+requires the cuda compiler and related libraries (Cublas)
 
 See the example makefile on how to set the flags.
 
@@ -257,7 +276,7 @@ Python example with GPU support
 -------------------------------
 
 The auto-tuning example above also runs on the GPU. Edit
-`python/demo_auto_tune.py` around line 100 with the values
+`demos/demo_auto_tune.py` at line 100 with the values
 
 ```python
 keys_to_test = keys_gpu
@@ -268,7 +287,7 @@ and you can run
 
 ```
 export PYTHONPATH=.
-python/demo_auto_tune.py
+python demos/demo_auto_tune.py
 ```
 
 to test the GPU code.
@@ -302,7 +321,7 @@ inside the created container, or better, mount a directory from the host
   nvidia-docker run -ti --name faiss -v /my/host/data/folder/ann_dataset/sift/:/opt/faiss/sift1M faiss bash
 
 
-Hot to use Faiss in your own projects
+How to use Faiss in your own projects
 =====================================
 
 C++
@@ -319,7 +338,7 @@ the executable should be linked to one of these. If you use
 the static version (.a), add the LDFLAGS used in the Makefile.
 
 For binary-only distributions, the include files should be under
-a faiss/ directory, so that they can be included as
+a `faiss/` directory, so that they can be included as
 
 ```c++
 #include <faiss/IndexIVFPQ.h>
@@ -354,6 +373,7 @@ is enabled), the build process can be done by the following commands:
 
 ```
 mkdir build
+cd build
 cmake ..
 make      # use -j to enable parallel build
 ```
